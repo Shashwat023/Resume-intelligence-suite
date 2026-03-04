@@ -4,13 +4,15 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import {
-  Upload, Mic, MicOff, Play, Square, CheckCircle2,
+  Upload, Mic, Play, CheckCircle2,
   Loader2, ChevronRight, BarChart3, AlertCircle,
   RefreshCw, StopCircle, User, Briefcase, FileText
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { ResumeProvider, useSharedResume } from "@/context/ResumeContext"
+import SkillGapAnalyzer from "@/components/skill-gap/SkillGapAnalyzer"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -65,9 +67,12 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function InterviewPage() {
+// ─── Inner component that uses the shared context ────────────────────────────
+function InterviewPageInner() {
+  // Shared resume state (synced with Skill Gap Analyzer)
+  const { sharedResume: resumeFile, setSharedResume: setResumeFile } = useSharedResume()
+
   // Setup state
-  const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [candidateName, setCandidateName] = useState("")
   const [position, setPosition] = useState("")
   const [jobDescription, setJobDescription] = useState("")
@@ -317,7 +322,7 @@ export default function InterviewPage() {
     setCurrentIndex(0)
     setAnsweredCount(0)
     setPhase("setup")
-    setResumeFile(null)
+    setResumeFile(null)  // also clears shared context
     setCandidateName("")
     setPosition("")
     setJobDescription("")
@@ -338,7 +343,7 @@ export default function InterviewPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="px-4 py-12">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-3xl space-y-0">
 
           {/* Page Header */}
           <div className="mb-8">
@@ -815,9 +820,25 @@ export default function InterviewPage() {
             </div>
           )}
 
+          {/* ══════════════════════════════════════════════════════════════ */}
+          {/* SKILL GAP ANALYZER SECTION                                    */}
+          {/* ══════════════════════════════════════════════════════════════ */}
+          <div className="mt-16 pt-10 border-t border-border">
+            <SkillGapAnalyzer />
+          </div>
+
         </div>
       </main>
       <Footer />
     </div>
+  )
+}
+
+// ─── Page export wrapped with shared resume provider ──────────────────────────
+export default function InterviewPage() {
+  return (
+    <ResumeProvider>
+      <InterviewPageInner />
+    </ResumeProvider>
   )
 }
