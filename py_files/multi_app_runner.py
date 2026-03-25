@@ -7,13 +7,12 @@ def start_service(app_import_string, port):
     # reload=False is recommended for production/multiprocessing
     uvicorn.run(app_import_string, host="0.0.0.0", port=port, reload=False)
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     # List of tuples: (app_import_string, port)
     # Replace 'resume_optimizer:app' with your actual file and app names
     services = [
         ("resume_optimizer:app", 8080),  # Your existing app
         ("doc_summarizer:app", 8000),   # Example second app
-        ("question_answer:app", 8082),    # Example third app
         ("chatbot:app", 8083),    # Example third app
     ]
 
