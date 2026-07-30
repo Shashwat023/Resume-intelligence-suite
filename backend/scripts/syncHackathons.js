@@ -2,15 +2,19 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const mongoose = require("mongoose")
+const dns = require("dns")
+dns.setServers(['8.8.8.8', '8.8.4.4'])
 const Hackathon = require("../models/Hackathon")
 
 // TODO: Schedule via cron / n8n webhook trigger
 // Example cron: 0 2 * * * (daily at 2 AM)
 // Example n8n: HTTP Request node pointing to /api/alerts/sync/hackathons
 
-const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID ? 
-  process.env.GOOGLE_SHEET_ID.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] || process.env.GOOGLE_SHEET_ID :
-  "1bSHWwYJ9kIdpYSLkqtg1Q0troGS0HlDjwlReUMoqiDU"
+if (!process.env.GOOGLE_SHEET_ID) {
+  throw new Error("Missing GOOGLE_SHEET_ID in environment")
+}
+const GOOGLE_SHEET_ID =
+  process.env.GOOGLE_SHEET_ID.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] || process.env.GOOGLE_SHEET_ID
 const HACKATHON_SHEET = "Hackathons"
 
 /**

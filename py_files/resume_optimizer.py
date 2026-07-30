@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any
+from typing import Dict, Any
 import fitz  # PyMuPDF
 import os
 import shutil
@@ -15,9 +15,9 @@ from langchain_groq import ChatGroq
 load_dotenv()
 
 qlm = ChatGroq(
-    model_name="openai/gpt-oss-20b",
-    api_key=os.getenv("GROQ_API_KEY")
+    model_name="openai/gpt-oss-20b", api_key=os.getenv("GROQ_API_KEY"), max_tokens=4096
 )
+
 
 # -------------------------------
 # PDF Text Extraction
@@ -35,17 +35,21 @@ def extract_text_from_pdf(file_path, max_chars=None):
         return text[:max_chars]
     return text
 
+
 # -------------------------------
 # Call Groq LLM
 # -------------------------------
 def call_groq(prompt):
     try:
         ai_message = qlm.invoke(prompt)
-        response_text = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+        response_text = (
+            ai_message.content if hasattr(ai_message, "content") else str(ai_message)
+        )
         return response_text
     except Exception as e:
         print("GROQ ERROR:", e)
         return f"Error: {e}"
+
 
 # -------------------------------
 # Save optimized resume as text
@@ -56,6 +60,7 @@ def save_resume_as_text(content, output_path="optimized_resume.txt"):
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
     return output_path
+
 
 # ---------------------------------------------------------
 # Build Prompt and Call LLM
@@ -150,23 +155,21 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
         "actionItems": [],
         "proTips": [],
         "atsChecklist": [],
-        "optimizedResume": None
+        "optimizedResume": None,
     }
 
     text = llm_text.strip()
 
     # 1) Overall ATS Score
     score_match = re.search(
-        r"\*\*OVERALL_ATS_SCORE\*\*\s*\n\s*([0-9]+(?:\.[0-9]+)?)",
-        text, re.I
+        r"\*\*OVERALL_ATS_SCORE\*\*\s*\n\s*([0-9]+(?:\.[0-9]+)?)", text, re.I
     )
     if score_match:
         result["overallATSScore"] = float(score_match.group(1))
 
     # 2) Strengths - bullets between STRENGTHS and next section
     strengths_match = re.search(
-        r"\*\*STRENGTHS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*STRENGTHS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if strengths_match:
         bullets = re.findall(r"^-\s+(.+)$", strengths_match.group(1), re.M)
@@ -174,8 +177,7 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
 
     # 3) Improvements - bullets
     improvements_match = re.search(
-        r"\*\*IMPROVEMENTS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*IMPROVEMENTS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if improvements_match:
         bullets = re.findall(r"^-\s+(.+)$", improvements_match.group(1), re.M)
@@ -183,21 +185,19 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
 
     # 4) Keywords - comma-separated
     keywords_match = re.search(
-        r"\*\*KEYWORDS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*KEYWORDS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if keywords_match:
         keywords_text = keywords_match.group(1).strip()
         # Remove "Example:" line if present
-        keywords_text = re.sub(r'Example:.*', '', keywords_text, flags=re.I | re.S)
+        keywords_text = re.sub(r"Example:.*", "", keywords_text, flags=re.I | re.S)
         # Split by comma and clean
-        keywords = [k.strip() for k in keywords_text.split(',') if k.strip()]
+        keywords = [k.strip() for k in keywords_text.split(",") if k.strip()]
         result["keywords"] = keywords
 
     # 5) Summary - paragraph
     summary_match = re.search(
-        r"\*\*SUMMARY\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*SUMMARY\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if summary_match:
         result["summary"] = summary_match.group(1).strip()
@@ -205,25 +205,23 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
     # 6) Performance Metrics - line format "Metric: score/10"
     metrics_match = re.search(
         r"\*\*PERFORMANCE_METRICS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        text,
+        re.S | re.I,
     )
     if metrics_match:
         metrics_text = metrics_match.group(1)
         # Match lines like "Formatting: 7/10" or "Formatting: 7"
         metric_lines = re.findall(
-            r"^([^:]+):\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/10)?",
-            metrics_text, re.M
+            r"^([^:]+):\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/10)?", metrics_text, re.M
         )
         for name, score in metric_lines:
-            result["performanceMetrics"].append({
-                "parameter": name.strip(),
-                "score": float(score)
-            })
+            result["performanceMetrics"].append(
+                {"parameter": name.strip(), "score": float(score)}
+            )
 
     # 7) Action Items - numbered list
     action_match = re.search(
-        r"\*\*ACTION_ITEMS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*ACTION_ITEMS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if action_match:
         items = re.findall(r"^\d+\.\s+(.+)$", action_match.group(1), re.M)
@@ -231,8 +229,7 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
 
     # 8) Pro Tips - bullets
     tips_match = re.search(
-        r"\*\*PRO_TIPS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*PRO_TIPS\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if tips_match:
         bullets = re.findall(r"^-\s+(.+)$", tips_match.group(1), re.M)
@@ -240,22 +237,19 @@ def parse_llm_resume(llm_text: str) -> Dict[str, Any]:
 
     # 9) ATS Checklist - bullets
     checklist_match = re.search(
-        r"\*\*ATS_CHECKLIST\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)",
-        text, re.S | re.I
+        r"\*\*ATS_CHECKLIST\*\*\s*\n(.*?)(?=\n\*\*[A-Z_]+\*\*|\Z)", text, re.S | re.I
     )
     if checklist_match:
         bullets = re.findall(r"^-\s+(.+)$", checklist_match.group(1), re.M)
         result["atsChecklist"] = [b.strip() for b in bullets]
 
     # 10) Optimized Resume - everything after header
-    resume_match = re.search(
-        r"\*\*OPTIMIZED_RESUME\*\*\s*\n(.*)",
-        text, re.S | re.I
-    )
+    resume_match = re.search(r"\*\*OPTIMIZED_RESUME\*\*\s*\n(.*)", text, re.S | re.I)
     if resume_match:
         result["optimizedResume"] = resume_match.group(1).strip()
 
     return result
+
 
 # -------------------------------
 # FastAPI App
@@ -264,11 +258,9 @@ app = FastAPI(title="Resume Analyzer & Optimizer")
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
 @app.post("/analyze_resume/")
-def analyze_resume(
-    resume: UploadFile = File(...),
-    job_description: str = Form(...)
-):
+def analyze_resume(resume: UploadFile = File(...), job_description: str = Form(...)):
     resume_path = os.path.join(UPLOAD_FOLDER, resume.filename)
     with open(resume_path, "wb") as f:
         shutil.copyfileobj(resume.file, f)
@@ -282,21 +274,23 @@ def analyze_resume(
 
         # Save optimized resume
         save_path = save_resume_as_text(
-            parsed_json.get("optimizedResume", ""), 
-            output_path="optimized_resume.txt"
+            parsed_json.get("optimizedResume", ""), output_path="optimized_resume.txt"
         )
 
-        return JSONResponse(content={
-            "parsed_json": parsed_json,
-            "raw_llm_output": llm_output_text,
-            "optimized_resume_file": save_path
-        })
+        return JSONResponse(
+            content={
+                "parsed_json": parsed_json,
+                "raw_llm_output": llm_output_text,
+                "optimized_resume_file": save_path,
+            }
+        )
     finally:
         if os.path.exists(resume_path):
             os.remove(resume_path)
+
 
 # -------------------------------
 # Run server
 # -------------------------------
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8090)

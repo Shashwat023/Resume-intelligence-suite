@@ -111,18 +111,6 @@ export default function SkillGapAnalyzer() {
             const data: AnalysisResult = await res.json()
             if (!data || !("analysis_id" in data)) throw new Error("Malformed response from analysis endpoint")
 
-            // ── Validation: log full JSON + field map ──────────────────────────────
-            console.log("[SkillGap] ✅ Raw result from GET /analysis/{id}:", JSON.stringify(data, null, 2))
-            console.table({
-                "strong_skills count": { field: "result.strong_skills.length", value: data.strong_skills?.length ?? 0 },
-                "weak_skills count": { field: "result.weak_skills.length", value: data.weak_skills?.length ?? 0 },
-                "missing_skills count": { field: "result.missing_skills.length", value: data.missing_skills?.length ?? 0 },
-                "skill_gaps count": { field: "result.skill_gaps.length", value: data.skill_gaps?.length ?? 0 },
-                "candidate_skills": { field: "result.candidate_skills.length", value: data.candidate_skills?.length ?? 0 },
-                "required_skills": { field: "result.required_skills.length", value: data.required_skills?.length ?? 0 },
-                "courses count": { field: "result.course_recommendations.length", value: data.course_recommendations?.length ?? 0 },
-            })
-
             setResult(data)
             setPhase("done")
         } catch (e: unknown) {
@@ -138,7 +126,6 @@ export default function SkillGapAnalyzer() {
             const res = await fetch(`/api/skill-gap/analysis/${id}/status`)
             if (!res.ok) return
             const data = await res.json()
-            console.log("[SkillGap] poll →", data.status, "|", data.progress)
             setPollProgress(data.progress ?? data.status ?? "Analyzing…")
             if (data.status === "completed") { stopPolling(); await fetchResults(id) }
             else if (data.status === "failed") {
@@ -157,13 +144,11 @@ export default function SkillGapAnalyzer() {
             const form = new FormData()
             form.append("resume_pdf", sharedResume)
             form.append("job_description", jobDescription.trim())
-            console.log("[SkillGap] POST /analyze → job_description length:", jobDescription.trim().length, "| file:", sharedResume.name)
             const res = await fetch("/api/skill-gap/analyze", { method: "POST", body: form })
             const data = await res.json().catch(() => ({ error: "Invalid response" }))
             if (!res.ok) throw new Error(data.error ?? data.detail ?? `POST failed ${res.status}`)
             const id: string = data.analysis_id
             if (!id) throw new Error("No analysis_id in POST response")
-            console.log("[SkillGap] queued, analysis_id:", id)
             setAnalysisId(id); setPollProgress(data.progress ?? "Queued"); setPhase("polling")
             pollRef.current = setInterval(() => pollStatus(id), 3000)
         } catch (e: unknown) {

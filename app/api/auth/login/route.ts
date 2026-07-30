@@ -4,6 +4,9 @@ import { createAuthToken, setAuthCookie, type AuthUser } from "@/lib/auth"
 import clientPromise from "@/lib/mongodb"
 import { verifyPassword } from "@/lib/password"
 
+import dns from "dns"
+dns.setServers(['8.8.8.8', '8.8.4.4'])
+
 export const runtime = "nodejs"
 
 // TODO: Replace with actual database integration (MongoDB Atlas)

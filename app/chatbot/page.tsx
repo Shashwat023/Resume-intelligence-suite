@@ -65,7 +65,7 @@ export default function ChatbotPage() {
         },
       ])
     } catch (error) {
-      console.error("[v0] Upload error:", error)
+      console.error("Upload error:", error)
       alert("Failed to upload files. Please try again.")
     } finally {
       setIsLoading(false)
@@ -108,7 +108,7 @@ export default function ChatbotPage() {
         },
       ])
     } catch (error) {
-      console.error("[v0] Query error:", error)
+      console.error("Query error:", error)
       setMessages((prev) => [
         ...prev,
         {

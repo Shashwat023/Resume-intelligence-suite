@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createRequire } from "module"
 import mongoose from "mongoose"
+import dns from "dns"
+dns.setServers(['8.8.8.8', '8.8.4.4'])
 import JobPosting from "../../../../backend/models/JobPosting"
+import { escapeRegExp } from "@/lib/utils"
 
 const require = createRequire(import.meta.url)
 
@@ -32,7 +35,7 @@ export async function GET(req: NextRequest) {
     const query: any = {}
 
     if (keyword) {
-      const searchRegex = new RegExp(keyword.trim(), 'i')
+      const searchRegex = new RegExp(escapeRegExp(keyword.trim()), 'i')
       query.$or = [
         { job_title: { $regex: searchRegex } },
         { company_name: { $regex: searchRegex } },
@@ -42,11 +45,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (location) {
-      query.location = { $regex: location, $options: 'i' }
+      query.location = { $regex: escapeRegExp(location), $options: 'i' }
     }
 
     if (company) {
-      query.company_name = { $regex: company, $options: 'i' }
+      query.company_name = { $regex: escapeRegExp(company), $options: 'i' }
     }
 
     const jobs = await JobPosting.find(query)

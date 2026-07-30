@@ -3,20 +3,24 @@ node_modules/
 .pnp
 .pnp.js
 
-# Testing
+# Testing & Coverage
 coverage/
+*.lcov
 
-# Next.js
+# Next.js & Build Outputs
 .next/
 out/
 build/
+dist/
+*.tsbuildinfo
 
-# Production
+# Environment & Secret Files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!.env.template
+**/.env
+**/.env.*
 
 # Logs
 *.log
@@ -26,22 +30,30 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-# OS Files
+# OS & System Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# IDEs/Editors
+# IDEs & Code Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-workspace
+*.sublime-project
 .project
 .classpath
 .settings/
 
-# Python
+# Python & Virtual Environments
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -50,13 +62,14 @@ venv/
 .venv/
 env/
 .env/
+*venv/
+**/*venv/
 build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -75,14 +88,27 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-# Tool Specific
-faiss_store_enhanced/
-uploads/
-audio_files/
-reports/
-uploaded.pdf
-optimized_resume.txt
-Cold_Emails.json
-cmd.txt
-tsconfig.tsbuildinfo
+# Databases & Local Storage
+*.sqlite
+*.sqlite3
+*.db
 
+# Project-Specific Generated Files & Folders
+faiss_store*/
+**/faiss_store*/
+uploads/
+**/uploads/
+audio_files/
+**/audio_files/
+reports/
+**/reports/
+outputs/
+**/outputs/
+uploaded.pdf
+**/uploaded.pdf
+optimized_resume.txt
+**/optimized_resume.txt
+Cold_Emails.json
+**/Cold_Emails.json
+cmd.txt
+test_db.js

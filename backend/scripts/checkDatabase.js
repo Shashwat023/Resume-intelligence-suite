@@ -2,6 +2,8 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const mongoose = require("mongoose")
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 const JobPosting = require("../models/JobPosting")
 const Hackathon = require("../models/Hackathon")
 

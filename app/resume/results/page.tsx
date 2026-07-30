@@ -74,15 +74,6 @@ export default function ResultsPage() {
         }
         const data = (await res.json()) as { item: ResumeAnalysis }
         setItem(data.item)
-        // Debug: Log the retrieved data to check if recruiterEmail and resumeUrl are present
-        console.log("Resume analysis data retrieved:", {
-          recruiterEmail: data.item.recruiterEmail,
-          resumeUrl: data.item.resumeUrl,
-          fileName: data.item.fileName,
-          hasRecruiterEmail: !!data.item.recruiterEmail,
-          hasResumeUrl: !!data.item.resumeUrl,
-          shouldShowButton: !!(data.item.recruiterEmail && data.item.resumeUrl)
-        })
       } finally {
         setLoading(false)
       }
@@ -199,14 +190,6 @@ export default function ResultsPage() {
   }
 
   const handleColdMail = async () => {
-    console.log("Cold mail button clicked", {
-      hasItem: !!item,
-      recruiterEmail: item?.recruiterEmail,
-      resumeUrl: item?.resumeUrl,
-      hasRecruiterEmail: !!item?.recruiterEmail,
-      hasResumeUrl: !!item?.resumeUrl
-    })
-    
     if (!item?.recruiterEmail || !item?.resumeUrl) {
       setColdMailMessage("Recruiter email or resume URL is missing")
       return
@@ -222,9 +205,7 @@ export default function ResultsPage() {
         recruiter_email: item.recruiterEmail,
         job_description: item.jdText || ''
       }
-      
-      console.log("Sending cold mail request with body:", requestBody)
-      
+
       const response = await fetch('/api/cold-mail/send', {
         method: 'POST',
         headers: {
@@ -358,17 +339,7 @@ export default function ResultsPage() {
               </div>
 
               {/* Cold Mail Button */}
-              {(() => {
-                console.log("Checking cold mail button visibility:", {
-                  item: !!item,
-                  recruiterEmail: item?.recruiterEmail,
-                  resumeUrl: item?.resumeUrl,
-                  shouldShow: !!(item?.recruiterEmail && item?.resumeUrl)
-                })
-                const shouldShow = !!(item?.recruiterEmail && item?.resumeUrl)
-                console.log("Button will render:", shouldShow)
-                return shouldShow
-              })() && (
+              {!!(item?.recruiterEmail && item?.resumeUrl) && (
                 <div className="rounded-2xl bg-card border border-border p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Mail className="size-5 text-primary" />

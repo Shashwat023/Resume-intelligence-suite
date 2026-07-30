@@ -6,18 +6,16 @@ Provides REST API endpoints for the agentic workflow
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from pydantic import BaseModel
+from typing import List, Dict
 import uvicorn
 import os
 from datetime import datetime
 import uuid
-import json
 import fitz  # PyMuPDF for PDF extraction
 
 # Import from existing files
-from workflow import create_skill_gap_workflow, print_summary
-from state import AgentState
+from workflow import create_skill_gap_workflow
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -27,7 +25,7 @@ load_dotenv()
 app = FastAPI(
     title="Skill Gap Analyzer API",
     description="LangGraph-based agentic system for skill gap analysis and course recommendations",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -50,23 +48,22 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         # Open PDF from bytes
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         text = ""
-        
+
         # Extract text from each page
         for page_num in range(pdf_document.page_count):
             page = pdf_document[page_num]
             text += page.get_text()
-        
+
         pdf_document.close()
-        
+
         if not text.strip():
             raise ValueError("PDF appears to be empty or contains only images")
-        
+
         return text
-    
+
     except Exception as e:
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to extract text from PDF: {str(e)}"
+            status_code=400, detail=f"Failed to extract text from PDF: {str(e)}"
         )
 
 
@@ -128,7 +125,7 @@ def run_analysis(analysis_id: str, resume_text: str, job_description: str):
         # Update status
         analysis_results[analysis_id]["status"] = "processing"
         analysis_results[analysis_id]["progress"] = "Initializing agents..."
-        
+
         # Initialize state
         initial_state = {
             "resume_text": resume_text,
@@ -147,23 +144,23 @@ def run_analysis(analysis_id: str, resume_text: str, job_description: str):
             "recommendation_status": "pending",
             "visualization_paths": [],
             "errors": [],
-            "workflow_status": "in_progress"
+            "workflow_status": "in_progress",
         }
-        
+
         # Create workflow
         analysis_results[analysis_id]["progress"] = "Extracting skills..."
         app_workflow = create_skill_gap_workflow()
-        
+
         # Execute workflow
         analysis_results[analysis_id]["progress"] = "Calculating gaps..."
         final_state = app_workflow.invoke(initial_state)
-        
+
         # Store results
         analysis_results[analysis_id]["progress"] = "Generating recommendations..."
         analysis_results[analysis_id]["status"] = "completed"
         analysis_results[analysis_id]["result"] = final_state
         analysis_results[analysis_id]["progress"] = "Complete"
-        
+
     except Exception as e:
         analysis_results[analysis_id]["status"] = "failed"
         analysis_results[analysis_id]["error"] = str(e)
@@ -171,6 +168,7 @@ def run_analysis(analysis_id: str, resume_text: str, job_description: str):
 
 
 # API Endpoints
+
 
 @app.get("/")
 async def root():
@@ -183,9 +181,9 @@ async def root():
             "GET /analysis/{analysis_id}": "Get analysis results",
             "GET /analysis/{analysis_id}/status": "Check analysis status",
             "GET /visualization/{analysis_id}/{file_name}": "Download visualization file",
-            "GET /health": "Health check"
+            "GET /health": "Health check",
         },
-        "note": "Resume must be uploaded as PDF file. Job description as text."
+        "note": "Resume must be uploaded as PDF file. Job description as text.",
     }
 
 
@@ -193,12 +191,14 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     groq_configured = bool(os.getenv("GROQ_API_KEY"))
-    
+
     return {
         "status": "healthy" if groq_configured else "warning",
         "timestamp": datetime.utcnow().isoformat(),
         "groq_api_configured": groq_configured,
-        "message": "GROQ_API_KEY is required for skill extraction" if not groq_configured else "All systems operational"
+        "message": "GROQ_API_KEY is required for skill extraction"
+        if not groq_configured
+        else "All systems operational",
     }
 
 
@@ -206,43 +206,40 @@ async def health_check():
 async def create_analysis(
     background_tasks: BackgroundTasks,
     resume_pdf: UploadFile = File(..., description="Resume in PDF format"),
-    job_description: str = Form(..., description="Job description as text")
+    job_description: str = Form(..., description="Job description as text"),
 ):
     """
     Start a new skill gap analysis
-    
+
     - **resume_pdf**: Upload resume as PDF file
     - **job_description**: Paste job description as text
-    
+
     Returns analysis_id to track progress
     """
-    
+
     # Validate PDF file
-    if not resume_pdf.filename.endswith('.pdf'):
-        raise HTTPException(
-            status_code=400,
-            detail="Resume must be a PDF file"
-        )
-    
+    if not resume_pdf.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Resume must be a PDF file")
+
     # Validate GROQ API Key
     if not os.getenv("GROQ_API_KEY"):
         raise HTTPException(
             status_code=503,
-            detail="GROQ_API_KEY not configured. Please add it to .env file"
+            detail="GROQ_API_KEY not configured. Please add it to .env file",
         )
-    
+
     # Generate unique analysis ID
     analysis_id = str(uuid.uuid4())
-    
+
     try:
         # Read PDF file
         pdf_bytes = await resume_pdf.read()
-        
+
         # Extract text from PDF
         print(f"📄 Extracting text from PDF: {resume_pdf.filename}")
         resume_text = extract_text_from_pdf(pdf_bytes)
         print(f"✓ Extracted {len(resume_text)} characters from PDF")
-        
+
         # Initialize analysis record
         analysis_results[analysis_id] = {
             "status": "queued",
@@ -250,30 +247,26 @@ async def create_analysis(
             "created_at": datetime.utcnow().isoformat(),
             "resume_filename": resume_pdf.filename,
             "resume_text": resume_text[:500] + "...",  # Store preview only
-            "job_description": job_description[:500] + "..."  # Store preview only
+            "job_description": job_description[:500] + "...",  # Store preview only
         }
-        
+
         # Add background task
         background_tasks.add_task(
-            run_analysis,
-            analysis_id,
-            resume_text,
-            job_description
+            run_analysis, analysis_id, resume_text, job_description
         )
-        
+
         return AnalysisStatusResponse(
             analysis_id=analysis_id,
             status="queued",
             message="Analysis started successfully. PDF processed.",
-            progress="Queued for processing"
+            progress="Queued for processing",
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error processing request: {str(e)}"
+            status_code=500, detail=f"Error processing request: {str(e)}"
         )
 
 
@@ -284,14 +277,14 @@ async def get_analysis_status(analysis_id: str):
     """
     if analysis_id not in analysis_results:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     analysis = analysis_results[analysis_id]
-    
+
     return AnalysisStatusResponse(
         analysis_id=analysis_id,
         status=analysis["status"],
         message=f"Analysis is {analysis['status']}",
-        progress=analysis.get("progress", "Unknown")
+        progress=analysis.get("progress", "Unknown"),
     )
 
 
@@ -302,9 +295,9 @@ async def get_analysis_results(analysis_id: str):
     """
     if analysis_id not in analysis_results:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     analysis = analysis_results[analysis_id]
-    
+
     if analysis["status"] == "processing" or analysis["status"] == "queued":
         return JSONResponse(
             status_code=202,
@@ -312,34 +305,40 @@ async def get_analysis_results(analysis_id: str):
                 "analysis_id": analysis_id,
                 "status": analysis["status"],
                 "message": "Analysis still in progress",
-                "progress": analysis.get("progress", "Processing...")
-            }
+                "progress": analysis.get("progress", "Processing..."),
+            },
         )
-    
+
     if analysis["status"] == "failed":
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed: {analysis.get('error', 'Unknown error')}"
+            detail=f"Analysis failed: {analysis.get('error', 'Unknown error')}",
         )
-    
+
     # Return complete results
     result = analysis.get("result", {})
-    
+
     return AnalysisResponse(
         analysis_id=analysis_id,
         status=analysis["status"],
-        candidate_skills=[SkillItemResponse(**s) for s in result.get("candidate_skills", [])],
-        required_skills=[SkillItemResponse(**s) for s in result.get("required_skills", [])],
+        candidate_skills=[
+            SkillItemResponse(**s) for s in result.get("candidate_skills", [])
+        ],
+        required_skills=[
+            SkillItemResponse(**s) for s in result.get("required_skills", [])
+        ],
         skill_gaps=[SkillGapResponse(**g) for g in result.get("skill_gaps", [])],
         strong_skills=result.get("strong_skills", []),
         weak_skills=result.get("weak_skills", []),
         missing_skills=result.get("missing_skills", []),
-        course_recommendations=[CourseResponse(**c) for c in result.get("course_recommendations", [])],
+        course_recommendations=[
+            CourseResponse(**c) for c in result.get("course_recommendations", [])
+        ],
         total_learning_time=result.get("total_learning_time", 0.0),
         learning_roadmap=result.get("learning_roadmap", {}),
         visualization_paths=result.get("visualization_paths", []),
         errors=result.get("errors", []),
-        created_at=analysis["created_at"]
+        created_at=analysis["created_at"],
     )
 
 
@@ -350,14 +349,14 @@ async def get_analysis_summary(analysis_id: str):
     """
     if analysis_id not in analysis_results:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     analysis = analysis_results[analysis_id]
-    
+
     if analysis["status"] != "completed":
         raise HTTPException(status_code=400, detail="Analysis not completed yet")
-    
+
     result = analysis.get("result", {})
-    
+
     return {
         "analysis_id": analysis_id,
         "summary": {
@@ -366,15 +365,27 @@ async def get_analysis_summary(analysis_id: str):
             "weak_skills_count": len(result.get("weak_skills", [])),
             "missing_skills_count": len(result.get("missing_skills", [])),
             "total_gaps": len(result.get("skill_gaps", [])),
-            "critical_gaps": len([g for g in result.get("skill_gaps", []) if g.get("gap_severity") == "critical"]),
-            "high_priority_gaps": len([g for g in result.get("skill_gaps", []) if g.get("gap_severity") == "high"]),
+            "critical_gaps": len(
+                [
+                    g
+                    for g in result.get("skill_gaps", [])
+                    if g.get("gap_severity") == "critical"
+                ]
+            ),
+            "high_priority_gaps": len(
+                [
+                    g
+                    for g in result.get("skill_gaps", [])
+                    if g.get("gap_severity") == "high"
+                ]
+            ),
             "courses_recommended": len(result.get("course_recommendations", [])),
             "total_learning_hours": result.get("total_learning_time", 0.0),
-            "estimated_weeks": round(result.get("total_learning_time", 0.0) / 40, 1)
+            "estimated_weeks": round(result.get("total_learning_time", 0.0) / 40, 1),
         },
         "top_missing_skills": result.get("missing_skills", [])[:5],
         "top_weak_skills": result.get("weak_skills", [])[:5],
-        "top_strong_skills": result.get("strong_skills", [])[:5]
+        "top_strong_skills": result.get("strong_skills", [])[:5],
     }
 
 
@@ -385,23 +396,19 @@ async def get_visualization(analysis_id: str, file_name: str):
     """
     if analysis_id not in analysis_results:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     analysis = analysis_results[analysis_id]
-    
+
     if analysis["status"] != "completed":
         raise HTTPException(status_code=400, detail="Analysis not completed yet")
-    
+
     # Construct file path
     file_path = os.path.join("outputs", file_name)
-    
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Visualization file not found")
-    
-    return FileResponse(
-        file_path,
-        media_type="text/html",
-        filename=file_name
-    )
+
+    return FileResponse(file_path, media_type="text/html", filename=file_name)
 
 
 @app.delete("/analysis/{analysis_id}")
@@ -411,14 +418,11 @@ async def delete_analysis(analysis_id: str):
     """
     if analysis_id not in analysis_results:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    
+
     # Delete from memory
     del analysis_results[analysis_id]
-    
-    return {
-        "message": "Analysis deleted successfully",
-        "analysis_id": analysis_id
-    }
+
+    return {"message": "Analysis deleted successfully", "analysis_id": analysis_id}
 
 
 @app.get("/analyses")
@@ -427,40 +431,29 @@ async def list_analyses():
     List all analyses
     """
     analyses_list = []
-    
+
     for analysis_id, data in analysis_results.items():
-        analyses_list.append({
-            "analysis_id": analysis_id,
-            "status": data["status"],
-            "created_at": data["created_at"],
-            "progress": data.get("progress", "Unknown"),
-            "resume_filename": data.get("resume_filename", "N/A")
-        })
-    
-    return {
-        "total": len(analyses_list),
-        "analyses": analyses_list
-    }
+        analyses_list.append(
+            {
+                "analysis_id": analysis_id,
+                "status": data["status"],
+                "created_at": data["created_at"],
+                "progress": data.get("progress", "Unknown"),
+                "resume_filename": data.get("resume_filename", "N/A"),
+            }
+        )
+
+    return {"total": len(analyses_list), "analyses": analyses_list}
 
 
 # Error handlers
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "detail": str(exc)
-        }
+        status_code=500, content={"error": "Internal server error", "detail": str(exc)}
     )
 
 
 if __name__ == "__main__":
     # Run the API server
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

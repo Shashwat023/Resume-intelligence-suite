@@ -5,7 +5,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
@@ -13,7 +12,6 @@ import os
 from typing import List, Union
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
 import shutil
@@ -43,12 +41,16 @@ class EnhancedRAGPipeline:
         self.embedding_model = HuggingFaceEmbeddings(
             model_name="BAAI/bge-base-en-v1.5",
             model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True}
+            encode_kwargs={"normalize_embeddings": True},
         )
 
         # Initialize LLMs (keep your model)
-        self.query_llm = ChatGroq(model_name="openai/gpt-oss-20b", temperature=0.3)
-        self.answer_llm = ChatGroq(model_name="openai/gpt-oss-20b", temperature=0.2)
+        self.query_llm = ChatGroq(
+            model_name="openai/gpt-oss-20b", temperature=0.3, max_tokens=4096
+        )
+        self.answer_llm = ChatGroq(
+            model_name="openai/gpt-oss-20b", temperature=0.2, max_tokens=4096
+        )
 
         print("Enhanced RAG Pipeline initialized!")
 
@@ -63,7 +65,7 @@ class EnhancedRAGPipeline:
 
     def parse_txt(self, file_path: str) -> str:
         """Extract text from TXT file"""
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
 
     def chunk_text(self, text: str) -> List[str]:
@@ -71,7 +73,7 @@ class EnhancedRAGPipeline:
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
-            separators=["\n\n", "\n", ".", " "]
+            separators=["\n\n", "\n", ".", " "],
         )
         return splitter.split_text(text)
 
@@ -91,10 +93,10 @@ class EnhancedRAGPipeline:
             file_ext = Path(file_path).suffix.lower()
 
             try:
-                if file_ext == '.pdf':
+                if file_ext == ".pdf":
                     print(f"Reading PDF: {file_path}")
                     text = self.parse_pdf(file_path)
-                elif file_ext == '.txt':
+                elif file_ext == ".txt":
                     print(f"Reading TXT: {file_path}")
                     text = self.parse_txt(file_path)
                 else:
@@ -115,7 +117,9 @@ class EnhancedRAGPipeline:
 
             if self.vector_store is None:
                 # Create new vector store
-                self.vector_store = FAISS.from_documents(documents, self.embedding_model)
+                self.vector_store = FAISS.from_documents(
+                    documents, self.embedding_model
+                )
             else:
                 # Add to existing vector store
                 self.vector_store.add_documents(documents)
@@ -123,11 +127,7 @@ class EnhancedRAGPipeline:
             # Update retriever
             self.retriever = self.vector_store.as_retriever(
                 search_type="mmr",
-                search_kwargs={
-                    "k": 5,
-                    "fetch_k": 15,
-                    "lambda_mult": 0.7
-                }
+                search_kwargs={"k": 5, "fetch_k": 15, "lambda_mult": 0.7},
             )
 
             print(f"\nTotal chunks in vector store: {len(all_chunks)}")
@@ -144,17 +144,11 @@ class EnhancedRAGPipeline:
         """Load vector store from disk"""
         try:
             self.vector_store = FAISS.load_local(
-                path,
-                self.embedding_model,
-                allow_dangerous_deserialization=True
+                path, self.embedding_model, allow_dangerous_deserialization=True
             )
             self.retriever = self.vector_store.as_retriever(
                 search_type="mmr",
-                search_kwargs={
-                    "k": 5,
-                    "fetch_k": 15,
-                    "lambda_mult": 0.7
-                }
+                search_kwargs={"k": 5, "fetch_k": 15, "lambda_mult": 0.7},
             )
             print(f"Vector store loaded from {path}")
         except Exception as e:
@@ -167,7 +161,7 @@ class EnhancedRAGPipeline:
             template="""Rephrase the following question into 3 different, yet related, search queries. List them without any explanation or numbering.
 
 Question: {question}
-"""
+""",
         )
 
         # REPLACES LLMChain
@@ -213,7 +207,7 @@ Question: {question}
         if not self.retriever:
             return {
                 "answer": "No documents loaded. Please upload files first.",
-                "source_documents": []
+                "source_documents": [],
             }
 
         # Retrieve relevant documents
@@ -223,10 +217,12 @@ Question: {question}
         # Build history text from in-class memory (last 2 exchanges)
         history_text = ""
         if self.chat_history:
-            history_text = "\n".join([
-                f"{'Human' if isinstance(msg, HumanMessage) else 'AI'}: {msg.content}"
-                for msg in self.chat_history[-4:]
-            ])
+            history_text = "\n".join(
+                [
+                    f"{'Human' if isinstance(msg, HumanMessage) else 'AI'}: {msg.content}"
+                    for msg in self.chat_history[-4:]
+                ]
+            )
 
         # Create prompt with memory
         prompt = PromptTemplate(
@@ -251,25 +247,20 @@ Context:
 Question:
 {question}
 
-Answer:"""
+Answer:""",
         )
 
         # Generate answer
         chain = prompt | self.answer_llm | StrOutputParser()
-        answer = chain.invoke({
-            "context": context,
-            "chat_history": history_text,
-            "question": question
-        })
+        answer = chain.invoke(
+            {"context": context, "chat_history": history_text, "question": question}
+        )
 
         # Store in simple memory
         self.chat_history.append(HumanMessage(content=question))
         self.chat_history.append(AIMessage(content=answer))
 
-        return {
-            "answer": answer,
-            "source_documents": docs
-        }
+        return {"answer": answer, "source_documents": docs}
 
     def clear_memory(self):
         """Clear conversation memory"""
@@ -318,8 +309,8 @@ async def root():
             "/ask": "POST - Ask a question",
             "/history": "GET - Get chat history",
             "/clear": "POST - Clear chat memory",
-            "/health": "GET - Health check"
-        }
+            "/health": "GET - Health check",
+        },
     }
 
 
@@ -338,10 +329,10 @@ async def upload_files(files: List[UploadFile] = File(...)):
         for file in files:
             # Check file extension
             file_ext = Path(file.filename).suffix.lower()
-            if file_ext not in ['.pdf', '.txt']:
+            if file_ext not in [".pdf", ".txt"]:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Unsupported file type: {file.filename}. Only PDF and TXT files are allowed."
+                    detail=f"Unsupported file type: {file.filename}. Only PDF and TXT files are allowed.",
                 )
 
             # Create temporary file
@@ -355,7 +346,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
         return UploadResponse(
             message="Files processed successfully",
             files_processed=len(files),
-            total_chunks=total_chunks
+            total_chunks=total_chunks,
         )
 
     except Exception as e:
@@ -366,7 +357,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
         for temp_path in temp_file_paths:
             try:
                 os.unlink(temp_path)
-            except:
+            except Exception:
                 pass
 
 
@@ -380,11 +371,15 @@ async def ask_question(request: QuestionRequest):
 
         return AnswerResponse(
             answer=result["answer"],
-            source_documents=[doc.page_content[:200] + "..." for doc in result["source_documents"]]
+            source_documents=[
+                doc.page_content[:200] + "..." for doc in result["source_documents"]
+            ],
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating answer: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error generating answer: {str(e)}"
+        )
 
 
 @app.get("/history")
@@ -397,7 +392,9 @@ async def get_history():
         return {"chat_history": history}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving history: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving history: {str(e)}"
+        )
 
 
 @app.post("/clear")
@@ -421,7 +418,7 @@ async def health_check():
     return {
         "status": "healthy",
         "vector_store_loaded": rag_pipeline.vector_store is not None,
-        "retriever_ready": rag_pipeline.retriever is not None
+        "retriever_ready": rag_pipeline.retriever is not None,
     }
 
 
@@ -430,13 +427,13 @@ async def health_check():
 # ===========================
 
 if __name__ == "__main__":
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("Starting Enhanced RAG Pipeline API Server")
-    print("="*50)
+    print("=" * 50)
     print("\nAPI Endpoints:")
     print("   - http://localhost:8000/docs (Swagger UI)")
     print("   - http://localhost:8000/redoc (ReDoc)")
     print("   - http://localhost:8000/ (Root)")
-    print("\n" + "="*50 + "\n")
+    print("\n" + "=" * 50 + "\n")
 
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

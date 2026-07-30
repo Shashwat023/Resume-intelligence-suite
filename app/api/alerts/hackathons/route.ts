@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createRequire } from "module"
 import mongoose from "mongoose"
+import dns from "dns"
+dns.setServers(['8.8.8.8', '8.8.4.4'])
 import Hackathon from "../../../../backend/models/Hackathon"
 
 const require = createRequire(import.meta.url)

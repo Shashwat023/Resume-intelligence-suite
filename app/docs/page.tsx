@@ -31,6 +31,7 @@ export default function DocsPage() {
   const [result, setResult] = useState<any>(null)
   const [showRaw, setShowRaw] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const { user } = useAuth()
 
   // TODO: Add auth middleware to protect this route
@@ -46,39 +47,57 @@ export default function DocsPage() {
 
     setLoading(true)
     setResult(null)
+    setErrorMessage(null)
 
     try {
       const formData = new FormData()
+      let response: Response
 
       if (inputType === "url" && url) {
         formData.append("url", url)
         // Proxy to Python FastAPI endpoint
-        const response = await fetch("/api/docs/summarize/url", {
+        response = await fetch("/api/docs/summarize/url", {
           method: "POST",
           body: formData,
         })
-        if (response.status === 401) {
-          setLoginOpen(true)
-          return
-        }
-        const data = await response.json()
-        setResult(data)
       } else if (inputType === "pdf" && file) {
         formData.append("file", file)
         // Proxy to Python FastAPI endpoint
-        const response = await fetch("/api/docs/summarize/pdf", {
+        response = await fetch("/api/docs/summarize/pdf", {
           method: "POST",
           body: formData,
         })
-        if (response.status === 401) {
-          setLoginOpen(true)
-          return
-        }
-        const data = await response.json()
-        setResult(data)
+      } else {
+        return
       }
+
+      if (response.status === 401) {
+        setLoginOpen(true)
+        return
+      }
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setErrorMessage(data?.error || `Request failed (${response.status})`)
+        return
+      }
+
+      const hasUsableSummary = Boolean(
+        data?.final_summary?.final_tldr ||
+          data?.final_summary?.executive_summary ||
+          data?.final_summary?.top_bullets?.length ||
+          data?.final_summary?.combined_key_facts?.length,
+      )
+      if (!hasUsableSummary) {
+        setErrorMessage("The summarizer returned an unexpected response. Showing raw output below.")
+        setShowRaw(true)
+      }
+
+      setResult(data)
     } catch (error) {
       console.error("Summarization error:", error)
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong while summarizing the document.")
     } finally {
       setLoading(false)
     }
@@ -124,6 +143,12 @@ export default function DocsPage() {
             <h1 className="text-4xl font-bold text-balance">Document Summarizer</h1>
             <p className="text-muted-foreground text-lg">Upload a PDF or paste a URL to get an AI-powered summary</p>
           </div>
+
+          {errorMessage && !loading && (
+            <Card className="p-4 border-destructive/50 bg-destructive/5">
+              <p className="text-sm text-destructive">{errorMessage}</p>
+            </Card>
+          )}
 
           {!loading && !result && (
             <Card className="p-6 space-y-6">
@@ -219,7 +244,13 @@ export default function DocsPage() {
                   {showRaw ? <EyeOff className="size-4 mr-2" /> : <Eye className="size-4 mr-2" />}
                   {showRaw ? "Hide" : "View"} Raw JSON
                 </Button>
-                <Button onClick={() => setResult(null)} variant="outline">
+                <Button
+                  onClick={() => {
+                    setResult(null)
+                    setErrorMessage(null)
+                  }}
+                  variant="outline"
+                >
                   New Document
                 </Button>
               </div>

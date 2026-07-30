@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "concurrently \"next dev\" \"py -m uvicorn doc_summarizer:app --reload --app-dir py_files --port 8000 --log-level error\" \"py -m uvicorn resume_optimizer:app --reload --app-dir py_files --port 8080 --log-level error\" \"py -m uvicorn question_answering:app --reload --app-dir py_files --port 8082 --log-level error\" \"py -m uvicorn chatbot:app --reload --app-dir py_files --port 8083 --log-level error\"",
+    "dev": "concurrently \"next dev\" \"py_files\\docvenv\\Scripts\\python.exe -m uvicorn doc_summarizer:app --reload --app-dir py_files --port 8000 --log-level error\" \"py_files\\resvenv\\Scripts\\python.exe -m uvicorn resume_optimizer:app --reload --app-dir py_files --port 8090 --log-level error\" \"py_files\\chatvenv\\Scripts\\python.exe -m uvicorn chatbot:app --reload --app-dir py_files --port 8083 --log-level error\"",
     "lint": "eslint .",
     "start": "next start"
   },

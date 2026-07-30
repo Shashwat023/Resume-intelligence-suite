@@ -1,4 +1,3 @@
-import os
 import json
 import time
 import requests
@@ -6,6 +5,8 @@ import fitz  # PyMuPDF
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 
 # ---------------------------------------------------------
 # 1. Load environment + initialize Groq LLM
@@ -13,9 +14,8 @@ from langchain_groq import ChatGroq
 
 load_dotenv()
 
-qlm = ChatGroq(
-    model_name="openai/gpt-oss-20b"
-)
+qlm = ChatGroq(model_name="openai/gpt-oss-20b", max_tokens=4096)
+
 
 # ---------------------------------------------------------
 # 2. Extract text from URL or PDF
@@ -24,16 +24,15 @@ def extract_text_from_url(url: str) -> str:
     """Extract raw text from a webpage."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/120.0.0.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
     }
     response = requests.get(url, headers=headers)
     response.raise_for_status()
-    
+
     soup = BeautifulSoup(response.text, "html.parser")
     text = soup.get_text(separator="\n")
     return text
-
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -89,6 +88,7 @@ Respond ONLY with JSON.
 # 4. Chunking text
 # ---------------------------------------------------------
 
+
 def chunk_text(text: str, max_chars=3500, overlap_chars=250):
     """Split long text into overlapping chunks for LLM."""
     if not text:
@@ -122,6 +122,7 @@ def chunk_text(text: str, max_chars=3500, overlap_chars=250):
 # 5. Summarize a single chunk
 # ---------------------------------------------------------
 
+
 def summarize_chunk_with_prompt(chunk_text, max_retries=2, retry_delay=1.0):
     """Summarize one text chunk using the custom JSON prompt."""
     user_prompt = USER_PROMPT_TEMPLATE.format(chunk_text=chunk_text)
@@ -141,8 +142,8 @@ def summarize_chunk_with_prompt(chunk_text, max_retries=2, retry_delay=1.0):
                 e = raw.rfind("}")
                 if s != -1 and e != -1:
                     try:
-                        return json.loads(raw[s:e+1])
-                    except:
+                        return json.loads(raw[s : e + 1])
+                    except json.JSONDecodeError:
                         return {"error_raw": raw}
 
         except Exception as e:
@@ -158,6 +159,7 @@ def summarize_chunk_with_prompt(chunk_text, max_retries=2, retry_delay=1.0):
 # 6. Merge chunk summaries into final summary
 # ---------------------------------------------------------
 
+
 def aggregate_chunk_summaries(chunk_summaries):
     tldrs = [c.get("tldr", "") for c in chunk_summaries if c.get("tldr")]
 
@@ -172,7 +174,7 @@ def aggregate_chunk_summaries(chunk_summaries):
     merge_input = {
         "tldrs": tldrs,
         "bullets": bullets[:50],
-        "key_facts": key_facts[:200]
+        "key_facts": key_facts[:200],
     }
 
     FINAL_PROMPT = f"""
@@ -196,13 +198,13 @@ Only return JSON.
 
     try:
         return json.loads(raw)
-    except:
+    except json.JSONDecodeError:
         s = raw.find("{")
         e = raw.rfind("}")
         if s != -1 and e != -1:
             try:
-                return json.loads(raw[s:e+1])
-            except:
+                return json.loads(raw[s : e + 1])
+            except json.JSONDecodeError:
                 pass
 
     return {"error_raw": raw}
@@ -212,34 +214,29 @@ Only return JSON.
 # 7. Top-level function to summarize any text document
 # ---------------------------------------------------------
 
+
 def summarize_text_document(full_text: str):
     chunks = chunk_text(full_text)
     chunk_results = []
 
     for i, ch in enumerate(chunks):
-        print(f"Summarizing chunk {i+1}/{len(chunks)} (len={len(ch)})...")
+        print(f"Summarizing chunk {i + 1}/{len(chunks)} (len={len(ch)})...")
         chunk_summary = summarize_chunk_with_prompt(ch)
         chunk_results.append(chunk_summary)
 
     final_summary = aggregate_chunk_summaries(chunk_results)
 
-    return {
-        "chunk_summaries": chunk_results,
-        "final_summary": final_summary
-    }
+    return {"chunk_summaries": chunk_results, "final_summary": final_summary}
 
 
 # ---------------------------------------------------------
 # 8. FastAPI Backend Added Below
 # ---------------------------------------------------------
 
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(
     title="Document Summarizer API",
     description="Summarize PDFs or URLs using Llama-3-120B (Groq)",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # CORS
@@ -250,9 +247,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def home():
     return {"message": "Document Summarizer API is running 🚀"}
+
 
 @app.post("/summarize/url")
 async def summarize_url(url: str = Form(...)):
@@ -260,6 +259,7 @@ async def summarize_url(url: str = Form(...)):
     text = extract_text_from_url(url)
     result = summarize_text_document(text)
     return result
+
 
 @app.post("/summarize/pdf")
 async def summarize_pdf(file: UploadFile = File(...)):
@@ -272,8 +272,8 @@ async def summarize_pdf(file: UploadFile = File(...)):
     result = summarize_text_document(text)
     return result
 
+
 # ---------------------------------------------------------
 # Run command:
 # uvicorn app:app --reload
 # ---------------------------------------------------------
-

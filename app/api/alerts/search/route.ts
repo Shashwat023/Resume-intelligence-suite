@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import mongoose from "mongoose"
+import dns from "dns"
+dns.setServers(['8.8.8.8', '8.8.4.4'])
 import JobPosting from "../../../../backend/models/JobPosting"
+import { escapeRegExp } from "@/lib/utils"
 
 // TODO: Add authentication middleware
 // TODO: Add rate limiting to prevent abuse
@@ -21,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create search query using regex for case-insensitive search
-    const searchRegex = new RegExp(keyword.trim(), 'i')
+    const searchRegex = new RegExp(escapeRegExp(keyword.trim()), 'i')
     const query: any = {
       $or: [
         { job_title: { $regex: searchRegex } },
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     // Apply additional filters if provided
     if (filters?.location) {
-      query.location = { $regex: filters.location, $options: 'i' }
+      query.location = { $regex: escapeRegExp(filters.location), $options: 'i' }
     }
 
     const jobs = await JobPosting.find(query)
